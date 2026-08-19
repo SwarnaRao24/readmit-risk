@@ -10,6 +10,7 @@ def _raw_sample() -> pd.DataFrame:
         {
             "patient_nbr": [1, 1, 2],
             "readmitted": ["<30", "NO", ">30"],
+            "discharge_disposition_id": [1, 1, 1],
             "weight": [None, None, None],
             "max_glu_serum": [None, None, None],
             "A1Cresult": [None, None, ">7"],
@@ -32,7 +33,6 @@ def test_first_encounter_only():
 
 def test_binary_target():
     out = clean(_raw_sample())
-    # Patient 1's first visit was "<30" -> 1; patient 2 ">30" -> 0
     assert set(out["target"].unique()) <= {0, 1}
     assert out["target"].iloc[0] == 1
 
@@ -51,5 +51,14 @@ def test_no_missing_remains():
 def test_identifiers_removed():
     out = clean(_raw_sample())
     assert "patient_nbr" not in out.columns
-    assert "readmitted" not in out.columns  # raw target dropped; engineered 'target' kept
+    assert "readmitted" not in out.columns
     assert "target" in out.columns
+
+
+def test_expired_hospice_removed():
+    raw = _raw_sample()
+    raw["discharge_disposition_id"] = [1, 1, 11]  # patient 2's encounter = expired
+    out = clean(raw)
+    # Patient 2's only encounter ended in death -> removed entirely; only patient 1 remains
+    assert len(out) == 1
+    assert 11 not in list(out["discharge_disposition_id"])
